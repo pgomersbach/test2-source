@@ -1,38 +1,34 @@
 podTemplate(label: 'mypod', containers: [
     containerTemplate(name: 'git', image: 'alpine/git', ttyEnabled: true, command: 'cat'),
-    containerTemplate(name: 'maven', image: 'maven:3.3.9-jdk-8-alpine', command: 'cat', ttyEnabled: true),
+    containerTemplate(name: 'maven', image: 'maven:3.5-jdk-8', command: 'cat', ttyEnabled: true),
     containerTemplate(name: 'docker', image: 'docker', command: 'cat', ttyEnabled: true)
   ],
   volumes: [
     hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
   ]
   ) {
-    node('mypod') {
-        stage('Check running containers') {
-            container('docker') {
-                // example to show you can run docker commands when you mount the socket
-                sh 'hostname'
-                sh 'hostname -i'
-                sh 'docker ps'
-            }
-        }
-        
-        stage('Clone repository') {
-            container('git') {
-                sh 'whoami'
-                sh 'hostname -i'
-                sh 'git clone -b master https://github.com/lvthillo/hello-world-war.git'
-            }
-        }
-
-        stage('Maven Build') {
-            container('maven') {
-                dir('hello-world-war/') {
-                    sh 'hostname'
-                    sh 'hostname -i'
-                    sh 'mvn clean install'
-                }
-            }
-        }
+  node('mypod') {
+    container('maven') {
+      stage('git checkout') {
+          sh "git clone -b ${GITBRANCH} ${GITURL} ."
+//        sh 'git clone -b master https://${GIT_USERNAME}:${GIT_PASSWORD}@bitbucket.org/mnwgp/mn-wgp.git'
+//        sh 'echo $SLACK_URL $DOCKER_REGISTRY'
+      }
+      stage('maven package') {
+        sh 'mvn package "-Dtest=*Test, !*ApplicationTest*" "-Dmaven.exec.skip=true"'
+      }
+      stage('maven reports') {
+        sh 'mvn surefire-report:report-only'
+      }
+      stage('run unit tests') {
+        sh 'echo "run unit tests"'
+      }
     }
+    container('docker') {
+      stage('create docker image') {
+        sh 'echo "create docker image"'
+        def customImage = docker.build("my-image:${env.BUILD_ID}")
+      } 
+    }
+  }
 }
